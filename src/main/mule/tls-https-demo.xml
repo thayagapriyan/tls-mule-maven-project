@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd">
+
+    <!--
+      TLS context whose keystore is NOT in the repo. The custom
+      aws-tls-injector-maven-plugin downloads it from S3 into
+      target/classes/certificates/keystore.jks at build time, so the
+      classpath-relative path below resolves at runtime.
+
+      Passwords come from a property file (or secure properties) - never
+      hardcode real secrets. The demo keystore uses 'changeit'.
+    -->
+    <tls:context name="Demo_TLS_Context" doc:name="TLS Context"
+                 xmlns:doc="http://www.mulesoft.org/schema/mule/documentation">
+        <tls:key-store type="jks"
+                       path="certificates/keystore.jks"
+                       alias="mule-tls"
+                       keyPassword="changeit"
+                       password="changeit"/>
+    </tls:context>
+
+    <http:listener-config name="HTTPS_Listener_config" doc:name="HTTPS Listener config"
+                          xmlns:doc="http://www.mulesoft.org/schema/mule/documentation">
+        <http:listener-connection host="0.0.0.0" port="8443"
+                                  protocol="HTTPS" tlsContext="Demo_TLS_Context"/>
+    </http:listener-config>
+
+    <!-- Public HTTPS endpoint secured by the downloaded keystore. -->
+    <flow name="secure-hello-flow">
+        <http:listener config-ref="HTTPS_Listener_config" path="/secure-hello"/>
+        <set-payload value="#[output application/json --- { message: 'Secure hello over TLS', tls: true }]"/>
+        <logger level="INFO" message="#['Served /secure-hello over TLS']"/>
+    </flow>
+
+    <!--
+      Plain business flow with no TLS dependency, so it is trivially unit-testable
+      with MUnit in CI (no certificate/HTTPS handshake gymnastics required).
+    -->
+    <flow name="greeting-flow">
+        <set-variable variableName="name" value="#[payload.name default 'world']"/>
+        <set-payload value="#[output application/json --- { greeting: 'Hello ' ++ (vars.name as String) }]"/>
+    </flow>
+
+</mule>

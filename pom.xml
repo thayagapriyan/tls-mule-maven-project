@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.priyan.mule</groupId>
+    <artifactId>tls-demo-app</artifactId>
+    <version>1.0.0</version>
+    <!-- Mule application packaging: produces a deployable .jar via the Mule Maven plugin. -->
+    <packaging>mule-application</packaging>
+
+    <name>TLS Demo Mule Application</name>
+    <description>
+        Sample Mule 4 app that proves the custom aws-tls-injector-maven-plugin works: the plugin
+        downloads a keystore from S3 into target/classes/certificates at build time, and the
+        Mule HTTPS listener consumes it from the classpath. No .jks is ever committed to Git.
+    </description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+
+        <app.runtime>4.6.0</app.runtime>
+        <mule.maven.plugin.version>4.3.0</mule.maven.plugin.version>
+        <munit.version>3.1.0</munit.version>
+
+        <!--
+          Anypoint organization (Business Group) ID. Exchange publishes every asset
+          under groupId = orgId, so the custom plugin is consumed under this groupId.
+          Override per environment: -Danypoint.orgId=<your-org-guid>
+        -->
+        <anypoint.orgId>YOUR_ANYPOINT_ORG_ID</anypoint.orgId>
+
+        <!-- Coordinates of the custom plugin, as published to Anypoint Exchange. -->
+        <tls.injector.groupId>${anypoint.orgId}</tls.injector.groupId>
+        <tls.injector.plugin.version>1.0.0</tls.injector.plugin.version>
+
+        <!--
+          S3 source of the keystore. Overridable on the command line / in CI:
+            mvn package -Dtls.bucket=my-bucket -Dtls.key=mule-app/dev/keystore.jks
+        -->
+        <tls.bucket>mule-tls-bucket</tls.bucket>
+        <tls.key>mule-app/dev/keystore.jks</tls.key>
+        <tls.region>us-east-1</tls.region>
+    </properties>
+
+    <build>
+        <plugins>
+            <!-- ============================================================== -->
+            <!-- 1. Custom plugin under test: pulls the keystore from S3 into   -->
+            <!--    target/classes/certificates BEFORE Mule packages the app.   -->
+            <!--    generate-resources runs before process-resources/package.   -->
+            <!-- ============================================================== -->
+            <plugin>
+                <groupId>${tls.injector.groupId}</groupId>
+                <artifactId>aws-tls-injector-maven-plugin</artifactId>
+                <version>${tls.injector.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>fetch-tls-certs</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>fetch-tls-context</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <region>${tls.region}</region>
+                    <failOnMissingFile>true</failOnMissingFile>
+                    <files>
+                        <file>
+                            <bucket>${tls.bucket}</bucket>
+                            <key>${tls.key}</key>
+                            <targetFileName>certificates/keystore.jks</targetFileName>
+                        </file>
+                    </files>
+                </configuration>
+            </plugin>
+
+            <!-- ============================================================== -->
+            <!-- 2. Mule Maven plugin: packages the mule-application artifact.   -->
+            <!-- ============================================================== -->
+            <plugin>
+                <groupId>org.mule.tools.maven</groupId>
+                <artifactId>mule-maven-plugin</artifactId>
+                <version>${mule.maven.plugin.version}</version>
+                <extensions>true</extensions>
+            </plugin>
+
+            <!-- ============================================================== -->
+            <!-- 3. MUnit: runs the Mule unit tests under src/test/munit.       -->
+            <!-- ============================================================== -->
+            <plugin>
+                <groupId>com.mulesoft.munit.tools</groupId>
+                <artifactId>munit-maven-plugin</artifactId>
+                <version>${munit.version}</version>
+                <executions>
+                    <execution>
+                        <id>test</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>test</goal>
+                            <goal>coverage-report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <!-- HTTP connector: provides the HTTPS listener + TLS context elements. -->
+        <dependency>
+            <groupId>org.mule.connectors</groupId>
+            <artifactId>mule-http-connector</artifactId>
+            <version>1.10.0</version>
+            <classifier>mule-plugin</classifier>
+        </dependency>
+
+        <!-- MUnit test dependencies. -->
+        <dependency>
+            <groupId>com.mulesoft.munit</groupId>
+            <artifactId>munit-runner</artifactId>
+            <version>${munit.version}</version>
+            <classifier>mule-plugin</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.mulesoft.munit</groupId>
+            <artifactId>munit-tools</artifactId>
+            <version>${munit.version}</version>
+            <classifier>mule-plugin</classifier>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <!--
+      Repositories:
+        - mulesoft-public      : community connectors, Mule/MUnit plugins (anonymous).
+        - anypoint-exchange-v3 : private org repo that serves the custom plugin asset.
+                                 Credentials come from a <server> of the SAME id in
+                                 settings.xml (connected app). CI writes that file.
+    -->
+    <repositories>
+        <repository>
+            <id>mulesoft-public</id>
+            <name>MuleSoft Public Repository</name>
+            <url>https://repository.mulesoft.org/nexus/content/repositories/public/</url>
+            <layout>default</layout>
+        </repository>
+        <repository>
+            <id>anypoint-exchange-v3</id>
+            <name>Anypoint Exchange</name>
+            <url>https://maven.anypoint.mulesoft.com/api/v3/organizations/${anypoint.orgId}/maven</url>
+            <layout>default</layout>
+        </repository>
+    </repositories>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>mulesoft-public</id>
+            <name>MuleSoft Public Repository</name>
+            <url>https://repository.mulesoft.org/nexus/content/repositories/public/</url>
+            <layout>default</layout>
+        </pluginRepository>
+        <pluginRepository>
+            <id>anypoint-exchange-v3</id>
+            <name>Anypoint Exchange</name>
+            <url>https://maven.anypoint.mulesoft.com/api/v3/organizations/${anypoint.orgId}/maven</url>
+            <layout>default</layout>
+        </pluginRepository>
+    </pluginRepositories>
+</project>

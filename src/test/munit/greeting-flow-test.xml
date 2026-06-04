@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+    <munit:config name="greeting-flow-test.xml"/>
+
+    <!-- Verifies the business flow logic. Runs in CI without any cert/HTTPS setup. -->
+    <munit:test name="greeting-flow-returns-greeting" description="greeting-flow greets the supplied name">
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload value="#[output application/json --- { name: 'Priyan' }]"
+                               mediaType="application/json"/>
+            </munit:set-event>
+            <flow-ref name="greeting-flow"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload.greeting]"
+                                     is="#[MunitTools::equalTo('Hello Priyan')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="greeting-flow-defaults-to-world" description="greeting-flow defaults when no name given">
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload value="#[output application/json --- {}]" mediaType="application/json"/>
+            </munit:set-event>
+            <flow-ref name="greeting-flow"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload.greeting]"
+                                     is="#[MunitTools::equalTo('Hello world')]"/>
+        </munit:validation>
+    </munit:test>
+
+</mule>

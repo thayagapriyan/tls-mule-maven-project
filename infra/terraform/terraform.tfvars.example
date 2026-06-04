@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars and fill in. Do NOT commit terraform.tfvars.
+
+aws_region  = "us-east-1"
+github_repo = "thayagapriyan/tls-mule-maven-project"
+bucket_name = "mule-tls-bucket"
+
+# Tighten to the exact prefix the plugin reads.
+s3_key_prefixes = ["mule-app/*"]
+
+# Only these refs may assume the role.
+allowed_subjects = ["ref:refs/heads/main", "pull_request"]
+
+# Set to false if token.actions.githubusercontent.com already exists in the account.
+create_oidc_provider = true
+
+tags = {
+  Project = "tls-demo-app"
+  Owner   = "priyan"
+}

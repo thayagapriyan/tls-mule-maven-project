@@ -1,0 +1,24 @@
+# Build output
+target/
+
+# TLS material must never be committed — it is downloaded from S3 at build time
+*.jks
+*.p12
+*.pem
+*.keystore
+*.truststore
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+crash.log

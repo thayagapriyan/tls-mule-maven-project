@@ -1,0 +1,101 @@
+name: Build & Test (Mule app)
+
+# Builds the Mule app the way a real consumer does:
+#   - the custom plugin is RESOLVED from Anypoint Exchange (not built here)
+#   - AWS access uses GitHub OIDC -> an IAM role (no static keys)
+#   - the plugin downloads the keystore from a REAL S3 bucket during the build
+#
+# Required repo configuration:
+#   Secrets:
+#     EXCHANGE_CLIENT_ID      - Anypoint connected-app client id (Exchange read)
+#     EXCHANGE_CLIENT_SECRET  - connected-app client secret
+#     AWS_ROLE_ARN            - IAM role to assume via OIDC (s3:GetObject on the bucket)
+#   Variables (vars.*):
+#     ANYPOINT_ORG_ID         - Anypoint org/business-group GUID (Exchange groupId)
+#     AWS_REGION              - e.g. us-east-1
+#     TLS_BUCKET              - S3 bucket holding the keystore
+#     TLS_KEY                 - S3 object key, e.g. mule-app/dev/keystore.jks
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for AWS OIDC
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TLS_BUCKET: ${{ vars.TLS_BUCKET }}
+      TLS_KEY:    ${{ vars.TLS_KEY }}
+      ANYPOINT_ORG_ID: ${{ vars.ANYPOINT_ORG_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # Connected-app credentials for the Exchange Maven repo. The <server> id MUST
+      # match the <repository>/<pluginRepository> id in pom.xml (anypoint-exchange-v3).
+      - name: Write Maven settings for Anypoint Exchange
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>anypoint-exchange-v3</id>
+                <username>~~~Client~~~</username>
+                <password>${env.EXCHANGE_CLIENT_ID}~?~${env.EXCHANGE_CLIENT_SECRET}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+        env:
+          EXCHANGE_CLIENT_ID: ${{ secrets.EXCHANGE_CLIENT_ID }}
+          EXCHANGE_CLIENT_SECRET: ${{ secrets.EXCHANGE_CLIENT_SECRET }}
+
+      # Assume the IAM role via OIDC; exports AWS_* env the AWS SDK default chain reads.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # generate-resources -> custom plugin (from Exchange) downloads the keystore
+      # from the real bucket -> Mule packages the app -> MUnit runs.
+      - name: Build & test the Mule app
+        run: >-
+          mvn -B clean package
+          -Danypoint.orgId=${ANYPOINT_ORG_ID}
+          -Dtls.bucket=${TLS_BUCKET}
+          -Dtls.key=${TLS_KEY}
+          -Dtls.region=${AWS_REGION}
+
+      - name: Assert keystore was injected into target/classes
+        run: |
+          test -f target/classes/certificates/keystore.jks \
+            && echo "OK: keystore present in build output" \
+            || { echo "FAIL: plugin did not write the keystore"; exit 1; }
+
+      - name: Assert keystore was packaged into the artifact
+        run: |
+          jar tf target/*-mule-application.jar | grep -q 'certificates/keystore.jks' \
+            && echo "OK: keystore packaged into deployable artifact" \
+            || { echo "FAIL: keystore missing from artifact"; exit 1; }
+
+      - name: Upload MUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: munit-reports
+          path: target/site/munit/
