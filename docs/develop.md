@@ -18,9 +18,9 @@ See [architecture.md](architecture.md). Key paths: `src/main/mule/`, `src/test/m
 # Against Exchange-published plugin:
 mvn clean package -Danypoint.orgId=<org-guid> -Dtls.bucket=<bucket> -Dtls.key=<key> -Dtls.region=<region>
 
-# Against a locally-installed snapshot (local testing):
+# Against a locally-installed snapshot (local testing). The plugin groupId already equals
+# anypoint.orgId, so only the SNAPSHOT version differs from the pom default:
 mvn clean package `
-  -Dtls.injector.groupId=com.priyan.maven `
   -Dtls.injector.plugin.version=1.0.0-SNAPSHOT `
   -Dtls.bucket=mule-tls-bucket -Dtls.key=mule-app/dev/keystore.jks -Dtls.region=us-east-1
 ```

@@ -9,6 +9,16 @@ Agents: append an entry for every pom/flow/MUnit/workflow/infra/doc change (see
 
 ## [Unreleased]
 
+### Changed
+- **Resolve the custom plugin from GitHub Packages instead of Anypoint Exchange.** The plugin moved
+  to GitHub Packages (Exchange can't host a consumable build plugin). Replaced the
+  `anypoint-exchange-v3` `<repository>`/`<pluginRepository>` with a `github` one
+  (`https://maven.pkg.github.com/thayagapriyan/tls-maven-plugin`), dropped the `anypoint.orgId`
+  property (kept the org-GUID groupId literal in `tls.injector.groupId` so coordinates are
+  unchanged), and bumped `tls.injector.plugin.version` `1.0.0` → `1.0.5`. The build workflow now
+  authenticates to GitHub Packages with the built-in `GITHUB_TOKEN` (`packages: read`) instead of
+  Anypoint connected-app secrets.
+
 ### Added
 - **Sample Mule 4 application** consuming the custom `aws-tls-injector-maven-plugin`:
   `pom.xml` (`packaging=mule-application`, plugin wired into `generate-resources`, Mule Maven
@@ -30,6 +40,10 @@ Agents: append an entry for every pom/flow/MUnit/workflow/infra/doc change (see
 
 ### Changed
 - `mule-artifact.json` set to `minMuleVersion 4.9.15`, Java spec `17`.
+- **`anypoint.orgId` default set to the real org GUID** (`3075da4c-6c1a-46d3-984a-191b16b7e34e`),
+  matching the plugin's published/installed groupId. Local testing therefore no longer needs a
+  `-Dtls.injector.groupId` override (only the SNAPSHOT version differs from the pom default);
+  updated `infra/localstack` output, `CLAUDE.md`, `docs/develop.md`, and `docs/testing.md`.
 
 ### Prompts
 - *"write a sample code in mule app to test this custom plugin. let me know how can we test custom
@@ -42,6 +56,9 @@ Agents: append an entry for every pom/flow/MUnit/workflow/infra/doc change (see
 - *"add different .md file like idea.md, architecture.md, HLD.md, LLD.md, develop.md, testing.md,
   deploy.md ... reference into agents.md then refer agents.md into claude.md ... update
   changelog.md"* → created `idea.md` + `docs/` + `AGENTS.md` + `CLAUDE.md` and this changelog.
+- *"update maven plugin pom to use my org id as group id 3075da4c-6c1a-46d3-984a-191b16b7e34e"* →
+  set `anypoint.orgId` default to the GUID so the app resolves the plugin under the same
+  coordinates it is published/installed under; simplified local-testing commands.
 
 ---
 

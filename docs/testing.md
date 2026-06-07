@@ -25,7 +25,6 @@ $env:AWS_DEFAULT_REGION="us-east-1"; $env:AWS_ENDPOINT_URL_S3="http://s3.localho
 
 cd ..\..
 mvn clean package `
-  -Dtls.injector.groupId=com.priyan.maven `
   -Dtls.injector.plugin.version=1.0.0-SNAPSHOT `
   -Dtls.bucket=mule-tls-bucket -Dtls.key=mule-app/dev/keystore.jks -Dtls.region=us-east-1
 

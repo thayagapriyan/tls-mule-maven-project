@@ -1,20 +1,20 @@
 name: Build & Test (Mule app)
 
 # Builds the Mule app the way a real consumer does:
-#   - the custom plugin is RESOLVED from Anypoint Exchange (not built here)
+#   - the custom plugin is RESOLVED from GitHub Packages (not built here)
 #   - AWS access uses GitHub OIDC -> an IAM role (no static keys)
 #   - the plugin downloads the keystore from a REAL S3 bucket during the build
 #
 # Required repo configuration:
 #   Secrets:
-#     EXCHANGE_CLIENT_ID      - Anypoint connected-app client id (Exchange read)
-#     EXCHANGE_CLIENT_SECRET  - connected-app client secret
-#     AWS_ROLE_ARN            - IAM role to assume via OIDC (s3:GetObject on the bucket)
+#     AWS_ROLE_ARN  - IAM role to assume via OIDC (s3:GetObject on the bucket)
 #   Variables (vars.*):
-#     ANYPOINT_ORG_ID         - Anypoint org/business-group GUID (Exchange groupId)
-#     AWS_REGION              - e.g. us-east-1
-#     TLS_BUCKET              - S3 bucket holding the keystore
-#     TLS_KEY                 - S3 object key, e.g. mule-app/dev/keystore.jks
+#     AWS_REGION    - e.g. us-east-1
+#     TLS_BUCKET    - S3 bucket holding the keystore
+#     TLS_KEY       - S3 object key, e.g. mule-app/dev/keystore.jks
+#
+# Note: resolving the plugin from GitHub Packages uses the built-in GITHUB_TOKEN
+# (packages: read) — it can read packages owned by the same account. No extra secret.
 on:
   push:
     branches: [ main ]
@@ -25,6 +25,7 @@ on:
 permissions:
   id-token: write   # required for AWS OIDC
   contents: read
+  packages: read    # resolve the custom plugin from GitHub Packages
 
 jobs:
   build:
@@ -33,36 +34,20 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       TLS_BUCKET: ${{ vars.TLS_BUCKET }}
       TLS_KEY:    ${{ vars.TLS_KEY }}
-      ANYPOINT_ORG_ID: ${{ vars.ANYPOINT_ORG_ID }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # Sets up JDK 17 AND writes settings.xml with a <server id="github"> for GitHub Packages
+      # (which requires auth even to read). The id MUST match the <pluginRepository> id in pom.xml.
+      - name: Set up JDK 17 + GitHub Packages auth
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: maven
-
-      # Connected-app credentials for the Exchange Maven repo. The <server> id MUST
-      # match the <repository>/<pluginRepository> id in pom.xml (anypoint-exchange-v3).
-      - name: Write Maven settings for Anypoint Exchange
-        run: |
-          mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml <<'EOF'
-          <settings>
-            <servers>
-              <server>
-                <id>anypoint-exchange-v3</id>
-                <username>~~~Client~~~</username>
-                <password>${env.EXCHANGE_CLIENT_ID}~?~${env.EXCHANGE_CLIENT_SECRET}</password>
-              </server>
-            </servers>
-          </settings>
-          EOF
-        env:
-          EXCHANGE_CLIENT_ID: ${{ secrets.EXCHANGE_CLIENT_ID }}
-          EXCHANGE_CLIENT_SECRET: ${{ secrets.EXCHANGE_CLIENT_SECRET }}
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       # Assume the IAM role via OIDC; exports AWS_* env the AWS SDK default chain reads.
       - name: Configure AWS credentials (OIDC)
@@ -71,15 +56,17 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # generate-resources -> custom plugin (from Exchange) downloads the keystore
+      # generate-resources -> custom plugin (from GitHub Packages) downloads the keystore
       # from the real bucket -> Mule packages the app -> MUnit runs.
       - name: Build & test the Mule app
         run: >-
           mvn -B clean package
-          -Danypoint.orgId=${ANYPOINT_ORG_ID}
           -Dtls.bucket=${TLS_BUCKET}
           -Dtls.key=${TLS_KEY}
           -Dtls.region=${AWS_REGION}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Assert keystore was injected into target/classes
         run: |

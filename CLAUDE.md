@@ -23,8 +23,9 @@ from **Anypoint Exchange**, the plugin downloads a keystore from **AWS S3** at b
   enforces this. Certs come from S3 at build time only.
 - **No static AWS keys.** CI uses GitHub OIDC → IAM role (`infra/terraform`); local uses a
   profile or LocalStack (`infra/localstack`).
-- **Plugin coordinates are properties.** Exchange uses `groupId=${anypoint.orgId}`; local testing
-  overrides with `-Dtls.injector.groupId=com.priyan.maven -Dtls.injector.plugin.version=1.0.0-SNAPSHOT`.
+- **Plugin coordinates are properties.** `groupId=${anypoint.orgId}` (the org GUID) matches how
+  the plugin is published *and* installed locally, so local testing only overrides the version:
+  `-Dtls.injector.plugin.version=1.0.0-SNAPSHOT`.
 - The keystore path in the Mule `<tls:context>` (`certificates/keystore.jks`) must match the
   plugin's `targetFileName` — change them together.
 - Keep TLS passwords out of source (demo uses `changeit`; real apps use secure properties).

@@ -29,10 +29,10 @@ output "next_steps" {
     $env:AWS_DEFAULT_REGION = "${var.region}"
     $env:AWS_ENDPOINT_URL_S3 = "${var.sdk_s3_endpoint}"
 
-    # 3. Build the app (resolves the plugin from your local ~/.m2 snapshot):
+    # 3. Build the app (groupId already matches the installed plugin; only the SNAPSHOT
+    #    version differs from the pom default, so override just the version):
     cd ${abspath("${path.module}/../..")}
     mvn clean package `
-      -Dtls.injector.groupId=com.priyan.maven `
       -Dtls.injector.plugin.version=1.0.0-SNAPSHOT `
       -Dtls.bucket=${aws_s3_bucket.tls.id} `
       -Dtls.key=${aws_s3_object.keystore.key} `
